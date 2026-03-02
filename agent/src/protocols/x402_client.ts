@@ -1,97 +1,105 @@
-import { UserSigner } from "@multiversx/sdk-wallet";
 import { ApiNetworkProvider } from "@multiversx/sdk-network-providers";
-import { Transaction, TransactionPayload, Address } from "@multiversx/sdk-core";
+import { Address, Transaction, TransactionPayload } from "@multiversx/sdk-core";
+import { UserSigner } from "@multiversx/sdk-wallet";
 
-// Uses MultiversX Supernova (Sub-300ms finality)
-const NETWORK_URL = process.env.MULTIVERSX_NETWORK || "https://devnet-api.multiversx.com";
-const provider = new ApiNetworkProvider(NETWORK_URL);
+const NETWORK_URL = process.env.MULTIVERSX_API_URL ?? "https://devnet-api.multiversx.com";
+const CHAIN_ID = process.env.MULTIVERSX_CHAIN_ID ?? "D";
+const provider = new ApiNetworkProvider(NETWORK_URL, { clientName: "syndicate-x402" });
 
-/**
- * Wrapper over native fetch that implements x402 Agentic Micropayments.
- * If a 402 is returned, it parses the required amount, signs a transaction on MultiversX,
- * waits for the ultra-fast Supernova finality, and retries the request.
- */
-export async function fetchWithx402(url: string, signer: UserSigner, init?: RequestInit): Promise<any> {
-    // 1. Make the initial request
-    let response = await fetch(url, init);
+type X402Requirement = {
+  network?: string;
+  address: string;          // erd1...
+  amountEGLD: string;       // "0.005"
+  ap2Credential?: string;   // opaque
+};
 
-    // 2. Check for x402 Payment Required
-    if (response.status === 402) {
-        console.log(`[x402] 402 Payment Required for ${url}. Parsing headers...`);
-        
-        const paymentHeader = response.headers.get("x-payment-required");
-        if (!paymentHeader) throw new Error("402 received but no x-payment-required header provided.");
-        
-        // Expected format: "multiversx-mainnet; address=erd1...; amount=0.005EGLD; ap2_credential=xyz123"
-        const params = parsePaymentHeader(paymentHeader);
-        
-        if (!params.address || !params.amount) {
-            throw new Error("Invalid x-payment-required header format.");
-        }
+function parseXPaymentRequired(headerValue: string): X402Requirement {
+  // Example: "multiversx-devnet; address=erd1...; amount=0.005EGLD; ap2_credential=xyz"
+  const parts = headerValue.split(";").map((p) => p.trim());
+  const out: any = { network: parts[0] };
 
-        console.log(`[x402] Executing atomic payment of ${params.amount} to ${params.address}`);
+  for (const part of parts.slice(1)) {
+    const [k, v] = part.split("=").map((s) => s.trim());
+    if (!k || v == null) continue;
+    if (k === "address") out.address = v;
+    if (k === "amount") out.amountEGLD = v.replace(/EGLD/i, "");
+    if (k === "ap2_credential") out.ap2Credential = v;
+  }
 
-        // 3. Construct and sign the transaction
-        const senderAddress = signer.getAddress();
-        const account = await provider.getAccount(senderAddress);
-        
-        // Convert "0.005" to the denomination (18 decimals)
-        const amountInWei = BigInt(parseFloat(params.amount) * 1e18);
-
-        const tx = new Transaction({
-            nonce: BigInt(account.nonce),
-            receiver: params.address,
-            sender: senderAddress.bech32(),
-            value: amountInWei,
-            gasLimit: 50000n,
-            data: new TransactionPayload("x402_payment"),
-            chainID: "D" // Devnet
-        });
-
-        const serializedTx = tx.serializeForSigning();
-        const signature = await signer.sign(serializedTx);
-        tx.applySignature(signature);
-
-        // 4. Broadcast and wait for Supernova finality (<300ms)
-        const txHash = await provider.sendTransaction(tx);
-        console.log(`[x402] Tx sent: ${txHash}. Waiting for Supernova finality...`);
-        
-        // Utilizing the 2026 sdk-core quick awaiter
-        await provider.awaitTransactionCompleted(txHash);
-        console.log(`[x402] Payment finalized on-chain!`);
-
-        // 5. Retry original request with the Payment proof header
-        const retryHeaders = new Headers(init?.headers);
-        retryHeaders.set("x-payment", `token=${txHash}; amount=${params.amount}EGLD; ap2_credential=${params.ap2Credential}`);
-
-        const retryInit = { ...init, headers: retryHeaders };
-        response = await fetch(url, retryInit);
-
-        if (!response.ok) {
-            throw new Error(`Request failed after x402 payment. Status: ${response.status}`);
-        }
-    }
-
-    // Return the successful JSON payload
-    if (response.ok) {
-        return response.json();
-    }
-    
-    throw new Error(`HTTP Error: ${response.status}`);
+  if (!out.address || !out.amountEGLD) {
+    throw new Error(`Invalid X-Payment-Required header: ${headerValue}`);
+  }
+  return out as X402Requirement;
 }
 
-/**
- * Helper to parse the 402 requirement header string
- */
-function parsePaymentHeader(header: string) {
-    const parts = header.split(";").map(p => p.trim());
-    const result: any = { network: parts[0] };
-    
-    for (let i = 1; i < parts.length; i++) {
-        const [key, val] = parts[i].split("=");
-        if (key === "address") result.address = val;
-        if (key === "amount") result.amount = val.replace("EGLD", "");
-        if (key === "ap2_credential") result.ap2Credential = val;
-    }
-    return result;
+function egldToWei(amount: string): bigint {
+  // decimal string -> 18 decimals
+  const [intPart, fracPartRaw = ""] = amount.trim().split(".");
+  const fracPart = (fracPartRaw + "0".repeat(18)).slice(0, 18);
+  const full = `${intPart}${fracPart}`.replace(/^0+/, "") || "0";
+  return BigInt(full);
+}
+
+async function awaitFinality(txHash: string) {
+  const anyProvider: any = provider;
+  if (typeof anyProvider.awaitTransactionComplete === "function") {
+    await anyProvider.awaitTransactionComplete(txHash);
+    return;
+  }
+  if (typeof anyProvider.awaitTransactionCompleted === "function") {
+    await anyProvider.awaitTransactionCompleted(txHash);
+    return;
+  }
+  // fallback: no-op (caller may poll manually)
+}
+
+export async function fetchWithX402(
+  url: string,
+  signer: UserSigner,
+  init: RequestInit = {},
+  opts: { ap2CredentialOverride?: string } = {}
+): Promise<any> {
+  const first = await fetch(url, init);
+  if (first.status !== 402) {
+    if (!first.ok) throw new Error(`HTTP ${first.status}`);
+    return first.json();
+  }
+
+  const headerValue = first.headers.get("x-payment-required") ?? first.headers.get("X-Payment-Required");
+  if (!headerValue) throw new Error("402 received, but missing X-Payment-Required header");
+
+  const req = parseXPaymentRequired(headerValue);
+  const receiver = Address.fromBech32(req.address);
+
+  const sender = signer.getAddress();
+  const account = await provider.getAccount(sender);
+
+  const valueWei = egldToWei(req.amountEGLD);
+
+  // Critical: build payment tx (simple EGLD transfer) as proof for x402 gate
+  const tx = new Transaction({
+    sender,
+    receiver,
+    value: valueWei,
+    gasLimit: 50_000n,
+    chainID: CHAIN_ID,
+    nonce: BigInt(account.nonce),
+    data: new TransactionPayload("x402_payment"),
+  });
+
+  const toSign = tx.serializeForSigning();
+  const signature = await signer.sign(toSign);
+  tx.applySignature(signature);
+
+  const txHash = await provider.sendTransaction(tx);
+  await awaitFinality(txHash);
+
+  const ap2 = opts.ap2CredentialOverride ?? req.ap2Credential ?? "";
+
+  const retryHeaders = new Headers(init.headers);
+  retryHeaders.set("X-Payment", `token=${txHash}; amount=${req.amountEGLD}EGLD; ap2_credential=${ap2}`);
+
+  const retry = await fetch(url, { ...init, headers: retryHeaders });
+  if (!retry.ok) throw new Error(`HTTP ${retry.status} after x402 payment`);
+  return retry.json();
 }
