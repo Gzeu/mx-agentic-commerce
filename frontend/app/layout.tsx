@@ -6,8 +6,8 @@ import { TransactionsToastList } from '@multiversx/sdk-dapp/UI/TransactionsToast
 import { NotificationModal } from '@multiversx/sdk-dapp/UI/NotificationModal';
 import './globals.css';
 
-// Default to devnet for agentic testing
-const ENVIRONMENT = process.env.NEXT_PUBLIC_MULTIVERSX_NETWORK || 'devnet';
+// Default to mainnet for agentic commerce
+const ENVIRONMENT = process.env.NEXT_PUBLIC_MULTIVERSX_NETWORK || 'mainnet';
 
 // Use env variable with fallback to your specific ID
 const WALLET_CONNECT_PROJECT_ID = process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID || '9b1a9564f91cb659ffe21b73d5c4e2d8';
