@@ -119,12 +119,12 @@ export default function Home() {
 
       {/* Navigation Pills */}
       <div className="relative z-10 max-w-6xl mx-auto px-6 pt-8 pb-4">
-        <div className="inline-flex gap-2 p-1.5 bg-white/5 backdrop-blur-md rounded-2xl border border-white/5">
+        <div className="inline-flex gap-2 p-1.5 bg-white/5 backdrop-blur-md rounded-2xl border border-white/5 overflow-x-auto w-full md:w-auto">
           {(['dashboard', 'agent', 'quests', 'leaderboard'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-6 py-2.5 rounded-xl capitalize text-sm font-bold transition-all ${
+              className={`whitespace-nowrap px-6 py-2.5 rounded-xl capitalize text-sm font-bold transition-all ${
                 activeTab === tab
                   ? 'bg-white text-black shadow-lg'
                   : 'text-gray-400 hover:text-white hover:bg-white/5'
