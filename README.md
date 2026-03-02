@@ -1,5 +1,5 @@
 # 🚀 mx-agentic-commerce
-
+ 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FGzeu%2Fmx-agentic-commerce&project-name=mx-agentic-commerce&framework=nextjs&root-directory=frontend)
 
 Supernova Devnet project demonstrating Agentic Commerce using UCP, ACP, x402, and MCP. This framework enables human-to-agent and agent-to-agent negotiations settling at sub-second speeds on MultiversX.
