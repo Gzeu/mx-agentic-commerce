@@ -22,6 +22,10 @@ const nextConfig = {
                 zlib: false,
             };
         }
+        
+        // Fix for WalletConnect/MultiversX pino-pretty warnings
+        config.externals.push('pino-pretty', 'lokijs', 'encoding');
+
         return config;
     },
 };
