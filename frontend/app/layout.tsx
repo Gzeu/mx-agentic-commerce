@@ -22,12 +22,13 @@ export default function RootLayout({
           customNetworkConfig={{
             name: 'customConfig',
             apiTimeout: 6000,
-            walletConnectV2ProjectId: '9b1a9564f91cb659ffe21b73d5c4e2d8', // public fallback id for example
+            walletConnectV2ProjectId: '9b1a9564f91cb659ffe21b73d5c4e2d8', // public fallback id for testing
           }}
         >
           <DappCoreUIWrapper>
             <TransactionsToastList />
             <NotificationModal />
+            {/* Aceasta este fereastra modala care va aparea cand Agentul genereaza tranzactia */}
             <SignTransactionsModals className="custom-class-for-modals" />
             {children}
           </DappCoreUIWrapper>
