@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
+const SERVER_API_KEY = process.env.OPENROUTER_API_KEY;
+const DEFAULT_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
+const DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
 
 const SYSTEM_PROMPT = `You are SYNDICATE, an advanced AI Commerce Agent running on the MultiversX blockchain.
 You help users execute blockchain transactions, swap tokens, accept quests, negotiate deals, and interact with DeFi protocols.
@@ -48,13 +49,20 @@ async function triggerDiscordHook(message: string) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { prompt, userAddress } = body;
+    const { prompt, userAddress, agentConfig } = body;
 
     if (!prompt) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
     }
 
-    if (!OPENROUTER_API_KEY) {
+    // Use client-provided config if available, fallback to server defaults
+    const apiKey = (agentConfig?.apiKey && agentConfig.apiKey.trim() !== '') 
+      ? agentConfig.apiKey 
+      : SERVER_API_KEY;
+    const model = agentConfig?.model || DEFAULT_MODEL;
+    const baseUrl = agentConfig?.baseUrl || DEFAULT_BASE_URL;
+
+    if (!apiKey) {
       return NextResponse.json({ error: 'Agent not configured. Missing API key.' }, { status: 500 });
     }
 
@@ -62,16 +70,16 @@ export async function POST(req: Request) {
       ? `User wallet address: ${userAddress}. Network: MultiversX Mainnet.`
       : 'User is not connected to a wallet.';
 
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': 'https://mx-agentic-commerce-frontend.vercel.app',
         'X-Title': 'SYNDICATE Commerce Agent'
       },
       body: JSON.stringify({
-        model: MODEL,
+        model,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: `${userContext}\n\nUser message: ${prompt}` }
@@ -84,7 +92,7 @@ export async function POST(req: Request) {
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error('OpenRouter error:', errText);
+      console.error('LLM API error:', errText);
       return NextResponse.json({ error: 'LLM request failed', details: errText }, { status: 502 });
     }
 
@@ -106,9 +114,8 @@ export async function POST(req: Request) {
       };
     }
 
-    // Fire Discord webhook in background
     if (userAddress) {
-      triggerDiscordHook(`**[SYNDICATE Agent]** \`${userAddress.slice(0, 10)}...\` → "${prompt.slice(0, 80)}"`);
+      triggerDiscordHook(`**[SYNDICATE]** \`${userAddress.slice(0, 10)}...\` via \`${model}\` → "${prompt.slice(0, 80)}"`);
     }
 
     return NextResponse.json({
