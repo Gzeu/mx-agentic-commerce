@@ -1,121 +1,173 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { z } from 'zod';
-import { ApiNetworkProvider } from '@multiversx/sdk-network-providers';
-import { Address, SmartContract, AbiRegistry } from '@multiversx/sdk-core';
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+} from "@modelcontextprotocol/sdk/types.js";
+import {
+  Address,
+  SmartContractQueriesController,
+  Transaction,
+  TransactionPayload,
+  AbiRegistry
+} from "@multiversx/sdk-core";
+import { ApiNetworkProvider } from "@multiversx/sdk-network-providers";
+import z from "zod";
 
-const NETWORK = process.env.MULTIVERSX_NETWORK || 'mainnet';
-const API_URL = NETWORK === 'mainnet'
-  ? 'https://api.multiversx.com'
-  : 'https://devnet-api.multiversx.com';
+// Constants
+const NETWORK_URL = process.env.MULTIVERSX_NETWORK || "https://devnet-api.multiversx.com";
+const provider = new ApiNetworkProvider(NETWORK_URL);
+const queryController = new SmartContractQueriesController({ provider });
 
-const AGENT_REGISTRY = process.env.AGENT_REGISTRY_ADDRESS || '';
-const COMMERCE_ENGINE = process.env.COMMERCE_ENGINE_ADDRESS || '';
+const QUEST_ENGINE_ADDRESS = process.env.QUEST_ENGINE_ADDRESS || "erd1qqqqqqqqqqqqqpgq...questengine";
+const AGENT_IDENTITY_ADDRESS = process.env.AGENT_IDENTITY_ADDRESS || "erd1qqqqqqqqqqqqqpgq...agentidentity";
 
-const provider = new ApiNetworkProvider(API_URL, { clientName: 'mx-agentic-commerce-mcp' });
+// Initialize MCP Server
+const server = new Server(
+  {
+    name: "syndicate-mcp-server",
+    version: "1.0.0",
+  },
+  {
+    capabilities: {
+      tools: {},
+    },
+  }
+);
 
-const server = new McpServer({
-  name: 'mx-agentic-commerce',
-  version: '1.0.0',
+// List available tools
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return {
+    tools: [
+      {
+        name: "get_quest_details",
+        description: "Citește starea și detaliile unui quest de pe contractul QuestEngine de pe MultiversX.",
+        inputSchema: z.object({
+          questId: z.number().describe("ID-ul unic al quest-ului"),
+        }),
+      },
+      {
+        name: "prepare_accept_quest",
+        description: "Generează payload-ul tranzacției necesare pentru a accepta un quest (fără să o semneze).",
+        inputSchema: z.object({
+          questId: z.number().describe("ID-ul unic al quest-ului"),
+          agentAddress: z.string().describe("Adresa EGLD a agentului care acceptă quest-ul"),
+        }),
+      },
+      {
+        name: "get_agent_skills",
+        description: "Citește tokenii SBT (Soulbound Tokens) asociați unui agent de pe contractul AgentIdentity, reprezentând skill-urile acestuia.",
+        inputSchema: z.object({
+          agentAddress: z.string().describe("Adresa EGLD a agentului"),
+        }),
+      }
+    ],
+  };
 });
 
-// ---- TOOLS ----
+// Handle Tool Executions
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
 
-server.tool(
-  'get_agent_trust_score',
-  'Get the on-chain trust score and XP of a registered agent',
-  { agentId: z.string().describe('Agent ID (hex or bech32)') },
-  async ({ agentId }) => {
-    try {
-      const query = provider.queryContract({
-        address: new Address(AGENT_REGISTRY),
-        func: 'getAgentScore',
-        args: [agentId],
-      });
-      const result = await (await query);
-      return { content: [{ type: 'text', text: JSON.stringify({ agentId, score: result }) }] };
-    } catch (e) {
-      return { content: [{ type: 'text', text: `Error: ${(e as Error).message}` }], isError: true };
-    }
+  if (!args) {
+    throw new Error("Missing arguments");
   }
-);
 
-server.tool(
-  'get_order_status',
-  'Get the current status of a commerce order on-chain',
-  { orderId: z.string().describe('Order ID') },
-  async ({ orderId }) => {
-    try {
-      const query = provider.queryContract({
-        address: new Address(COMMERCE_ENGINE),
-        func: 'getOrderStatus',
-        args: [orderId],
-      });
-      const result = await (await query);
-      return { content: [{ type: 'text', text: JSON.stringify({ orderId, status: result }) }] };
-    } catch (e) {
-      return { content: [{ type: 'text', text: `Error: ${(e as Error).message}` }], isError: true };
+  try {
+    switch (name) {
+      case "get_quest_details": {
+        const { questId } = args as { questId: number };
+        
+        // Create an on-chain query to get quest info
+        const query = queryController.createQuery({
+            contract: QUEST_ENGINE_ADDRESS,
+            function: "getQuestDetails",
+            arguments: [questId.toString()],
+        });
+        
+        const response = await queryController.runQuery(query);
+        // In production, we would use AbiRegistry to parse the response
+        // For this MVP, we return the raw base64/hex data directly
+        return {
+          content: [{ type: "text", text: JSON.stringify({
+            status: "success",
+            network: NETWORK_URL,
+            questId,
+            returnData: response.returnData.map(d => Buffer.from(d, 'base64').toString('hex'))
+          })}]
+        };
+      }
+
+      case "prepare_accept_quest": {
+        const { questId, agentAddress } = args as { questId: number, agentAddress: string };
+        
+        // The function name on the SC to accept a quest
+        const scFunc = "acceptQuest";
+        // Format argument as hex
+        const questIdHex = questId.toString(16).padStart(8, '0');
+        
+        const payload = new TransactionPayload(`${scFunc}@${questIdHex}`);
+        
+        // Prepare a raw transaction object
+        const tx = new Transaction({
+            data: payload,
+            gasLimit: 5000000n,
+            sender: agentAddress,
+            receiver: QUEST_ENGINE_ADDRESS,
+            value: 0n,
+            chainID: "D" // Devnet ID, or '1' for mainnet
+        });
+
+        return {
+          content: [{ type: "text", text: JSON.stringify({
+            status: "prepared",
+            receiver: QUEST_ENGINE_ADDRESS,
+            data: payload.toString(),
+            gasLimit: tx.gasLimit.toString(),
+            value: "0",
+            message: "Transaction constructed. Ready for signature."
+          })}]
+        };
+      }
+
+      case "get_agent_skills": {
+        const { agentAddress } = args as { agentAddress: string };
+        
+        const addressObj = Address.fromBech32(agentAddress);
+        
+        const query = queryController.createQuery({
+            contract: AGENT_IDENTITY_ADDRESS,
+            function: "getAgentSkills",
+            arguments: [addressObj.hex()],
+        });
+        
+        const response = await queryController.runQuery(query);
+        
+        return {
+          content: [{ type: "text", text: JSON.stringify({
+            status: "success",
+            agent: agentAddress,
+            skillsHex: response.returnData.map(d => Buffer.from(d, 'base64').toString('hex'))
+          })}]
+        };
+      }
+
+      default:
+        throw new Error(`Unknown tool: ${name}`);
     }
+  } catch (error: any) {
+    return {
+      content: [{ type: "text", text: `Error executing tool ${name}: ${error.message}` }],
+      isError: true
+    };
   }
-);
+});
 
-server.tool(
-  'get_account_balance',
-  'Get EGLD balance of a MultiversX address',
-  { address: z.string().describe('MultiversX address (erd1...)') },
-  async ({ address }) => {
-    try {
-      const account = await provider.getAccount(new Address(address));
-      return {
-        content: [{
-          type: 'text',
-          text: JSON.stringify({
-            address,
-            balance: account.balance.toString(),
-            nonce: account.nonce,
-          })
-        }]
-      };
-    } catch (e) {
-      return { content: [{ type: 'text', text: `Error: ${(e as Error).message}` }], isError: true };
-    }
-  }
-);
-
-server.tool(
-  'get_network_stats',
-  'Get current MultiversX network statistics (Supernova)',
-  {},
-  async () => {
-    try {
-      const stats = await provider.getNetworkGeneralStatistics();
-      return { content: [{ type: 'text', text: JSON.stringify(stats) }] };
-    } catch (e) {
-      return { content: [{ type: 'text', text: `Error: ${(e as Error).message}` }], isError: true };
-    }
-  }
-);
-
-// ---- RESOURCES ----
-
-server.resource(
-  'leaderboard',
-  'mx-commerce://leaderboard',
-  async (uri) => ({
-    contents: [{
-      uri: uri.href,
-      text: 'Top agents leaderboard endpoint — query AgentRegistry for top 20 agents by trust score.',
-      mimeType: 'text/plain',
-    }]
-  })
-);
-
-// ---- START ----
-
-async function main() {
+// Start Server
+async function run() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('[MCP] mx-agentic-commerce MCP server started');
+  console.error("SYNDICATE MCP Server running on stdio");
 }
 
-main().catch(console.error);
+run().catch(console.error);
