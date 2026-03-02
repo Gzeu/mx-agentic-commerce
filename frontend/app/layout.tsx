@@ -5,7 +5,8 @@ import { SignTransactionsModals } from '@multiversx/sdk-dapp/UI/SignTransactions
 import { TransactionsToastList } from '@multiversx/sdk-dapp/UI/TransactionsToastList';
 import { NotificationModal } from '@multiversx/sdk-dapp/UI/NotificationModal';
 import './globals.css';
-import '@multiversx/sdk-dapp/build/index.css';
+// corectarea path-ului de import pentru stiluri
+import '@multiversx/sdk-dapp/UI/index.css';
 
 const ENVIRONMENT = 'devnet';
 
