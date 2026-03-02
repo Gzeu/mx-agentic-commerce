@@ -1,0 +1,25 @@
+{
+  "name": "mx-agentic-commerce",
+  "version": "1.0.0",
+  "description": "Gamified AI Agentic Commerce Platform on MultiversX",
+  "private": true,
+  "workspaces": [
+    "agent",
+    "mcp-server",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=mcp-server\" \"npm run dev --workspace=agent\" \"npm run dev --workspace=frontend\"",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "contracts:build": "cd contracts/agent-registry && mxpy contract build && cd ../commerce-engine && mxpy contract build && cd ../reputation-nft && mxpy contract build",
+    "contracts:deploy:testnet": "node scripts/deploy-testnet.js"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
