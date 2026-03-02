@@ -11,20 +11,33 @@ const FREE_MODELS = [
   { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash', provider: 'Google', badge: 'PAID' },
   { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI', badge: 'PAID' },
   { id: 'anthropic/claude-3-haiku', name: 'Claude 3 Haiku', provider: 'Anthropic', badge: 'PAID' },
-];
-
-const PROVIDERS = [
+];const PROVIDERS = [
   { id: 'openrouter', name: 'OpenRouter', url: 'https://openrouter.ai/api/v1', placeholder: 'sk-or-v1-...' },
+  { id: 'literouter', name: 'LiteRouter', url: 'https://api.literouter.com/v1', placeholder: 'cd53950c...' },
+  { id: 'morpheus', name: 'Morpheus (MOR)', url: 'https://api.mor.org/api/v1', placeholder: 'mor_...' },
   { id: 'openai', name: 'OpenAI Direct', url: 'https://api.openai.com/v1', placeholder: 'sk-...' },
   { id: 'custom', name: 'Custom / LiteLLM', url: '', placeholder: 'http://localhost:4000/v1' },
-];
-
-export interface AgentConfig {
-  apiKey: string;
-  model: string;
-  provider: string;
-  baseUrl: string;
-}
+const FREE_MODELS = [
+  // OpenRouter FREE models
+  { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B', provider: 'OpenRouter', badge: 'FREE' },
+  { id: 'mistralai/mistral-small-3.1-24b-instruct:free', name: 'Mistral Small 3.1 24B', provider: 'OpenRouter', badge: 'FREE' },
+  { id: 'google/gemma-3-27b-it:free', name: 'Gemma 3 27B', provider: 'OpenRouter', badge: 'FREE' },
+  { id: 'nvidia/nemotron-nano-12b-v2-vl:free', name: 'Nemotron Nano 12B', provider: 'OpenRouter', badge: 'FREE' },
+  { id: 'qwen/qwen3-4b:free', name: 'Qwen3 4B', provider: 'OpenRouter', badge: 'FREE' },
+  
+  // Morpheus (MOR) — Top picks from free tier
+  { id: 'glm-5', name: 'GLM-5 (Reasoning)', provider: 'Morpheus', badge: 'FREE' },
+  { id: 'llama-3.3-70b', name: 'Llama 3.3 70B', provider: 'Morpheus', badge: 'FREE' },
+  { id: 'qwen3-next-80b', name: 'Qwen3 Next 80B', provider: 'Morpheus', badge: 'FREE' },
+  { id: 'mistral-31-24b', name: 'Mistral 3.1 24B', provider: 'Morpheus', badge: 'FREE' },
+  { id: 'glm-4.7-flash', name: 'GLM-4.7 Flash (Fast)', provider: 'Morpheus', badge: 'FREE' },
+  { id: 'llama-3.2-3b', name: 'Llama 3.2 3B (Ultra Fast)', provider: 'Morpheus', badge: 'FREE' },
+  
+  // Paid models for comparison
+  { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash', provider: 'Google', badge: 'PAID' },
+  { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI', badge: 'PAID' },
+  { id: 'anthropic/claude-3-haiku', name: 'Claude 3 Haiku', provider: 'Anthropic', badge: 'PAID' },
+];}
 
 const DEFAULT_CONFIG: AgentConfig = {
   apiKey: '',
