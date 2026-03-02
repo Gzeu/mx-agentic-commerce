@@ -1,9 +1,17 @@
 {
   "name": "mx-agentic-commerce",
   "version": "1.0.0",
+  "private": true,
   "type": "module",
+  "workspaces": [
+    "agent",
+    "mcp-server",
+    "frontend"
+  ],
   "scripts": {
-    "start:mcp": "cd mcp-server && npm start",
-    "start:agent": "cd agent && npx ts-node src/syndicate_agent.ts"
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "start:mcp": "cd mcp-server && npm run build && node dist/index.js",
+    "start:agent": "cd agent && npm run build && node dist/syndicate_agent.js",
+    "build": "npm run build --workspaces"
   }
 }
