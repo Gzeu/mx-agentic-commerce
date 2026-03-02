@@ -1,0 +1,15 @@
+[package]
+name = "commerce-engine"
+version = "0.0.0"
+authors = ["George Pricop"]
+edition = "2021"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies.multiversx-sc]
+version = "0.54.2"
+
+[dev-dependencies.multiversx-sc-scenario]
+version = "0.54.2"
