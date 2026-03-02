@@ -12,6 +12,10 @@
     "dev:frontend": "npm run dev --workspace=frontend",
     "start:mcp": "cd mcp-server && npm run build && node dist/index.js",
     "start:agent": "cd agent && npm run build && node dist/syndicate_agent.js",
-    "build": "npm run build --workspaces"
+    "build": "npm run build --workspaces",
+    "contracts:deploy": "npx tsx scripts/deploy.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.1"
   }
 }
