@@ -6,7 +6,11 @@ import { TransactionsToastList } from '@multiversx/sdk-dapp/UI/TransactionsToast
 import { NotificationModal } from '@multiversx/sdk-dapp/UI/NotificationModal';
 import './globals.css';
 
-const ENVIRONMENT = 'devnet';
+// Default to devnet for agentic testing
+const ENVIRONMENT = process.env.NEXT_PUBLIC_MULTIVERSX_NETWORK || 'devnet';
+
+// Use env variable with fallback to your specific ID
+const WALLET_CONNECT_PROJECT_ID = process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID || '9b1a9564f91cb659ffe21b73d5c4e2d8';
 
 export default function RootLayout({
   children,
@@ -21,12 +25,12 @@ export default function RootLayout({
           customNetworkConfig={{
             name: 'customConfig',
             apiTimeout: 6000,
-            walletConnectV2ProjectId: '9b1a9564f91cb659ffe21b73d5c4e2d8',
+            walletConnectV2ProjectId: WALLET_CONNECT_PROJECT_ID,
           }}
         >
           <TransactionsToastList />
           <NotificationModal />
-          {/* Aceasta este fereastra modala care va aparea cand Agentul genereaza tranzactia */}
+          {/* Fereastra modala pentru generarea tranzactiilor */}
           <SignTransactionsModals className="custom-class-for-modals" />
           {children}
         </DappProvider>
