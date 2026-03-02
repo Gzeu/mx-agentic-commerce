@@ -1,22 +1,47 @@
 import { NextResponse } from 'next/server';
 
-// We import the Discord notification utility from the shared workspace
-// In Next.js App Router we could also just define it directly here if needed, 
-// but for now we simulate the hook inline to avoid transpilation workspace issues on Vercel
-async function triggerSocialHook(type: string, message: string) {
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const MODEL = 'google/gemini-2.0-flash-001';
+
+const SYSTEM_PROMPT = `You are SYNDICATE, an advanced AI Commerce Agent running on the MultiversX blockchain.
+You help users execute blockchain transactions, swap tokens, accept quests, negotiate deals, and interact with DeFi protocols.
+
+You must ALWAYS respond with a valid JSON object in this exact format:
+{
+  "traces": ["trace line 1", "trace line 2", ...],
+  "reply": "Your natural language response to the user",
+  "transaction": null OR { "receiver": "erd1...", "data": "base64orAscii", "gasLimit": "10000000", "value": "0" }
+}
+
+Trace lines simulate the internal agent pipeline. Always include 3-5 realistic traces like:
+- [UCP] Received Intent: "..."
+- [MCP Client] Querying on-chain context...
+- [A2A] Discovering peer agents...
+- [x402] Evaluating micropayment gateway...
+- [ACP] Generating transaction payload...
+
+For blockchain transactions on MultiversX mainnet:
+- Quest acceptance: receiver erd1qqqqqqqqqqqqqpgqq484ndp9x5rrdtdjtt0944062c3e5l4w7yqsck92ca
+- Token swap via AshSwap: receiver erd1qqqqqqqqqqqqqpgqa0fsfsqn8h0nsvw5f9aemc2qxx23xxz82j8qz5w8t0
+- Commerce orders: receiver erd1qqqqqqqqqqqqqpgqn88zcxm7knsr322vff6r5r5md7469aev7yqsz3vryz
+- gasLimit for simple txs: "5000000", complex: "20000000"
+- value in denomination (1 EGLD = 1000000000000000000)
+
+If the user is just chatting or asking questions (no transaction needed), set transaction to null.
+Always be helpful, concise, and technically accurate about MultiversX/blockchain topics.
+Respond in the same language the user writes in.`;
+
+async function triggerDiscordHook(message: string) {
   const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
-  if (!webhookUrl) return; // Silent skip if not configured
-  
+  if (!webhookUrl) return;
   try {
     await fetch(webhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        content: `**[${type}]** ${message}`
-      })
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: message })
     });
-  } catch(e) {
-    console.log("Webhook fail silently", e);
+  } catch (e) {
+    console.log('Webhook failed silently', e);
   }
 }
 
@@ -24,98 +49,76 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { prompt, userAddress } = body;
-    const shortAddr = userAddress ? userAddress.slice(0, 6) : "Anonymous";
 
     if (!prompt) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
     }
 
-    const promptLower = prompt.toLowerCase();
-    const isQuestRequest = promptLower.includes('quest') || promptLower.includes('accept');
-    const isNegotiationRequest = promptLower.includes('negotiate') || promptLower.includes('discount') || promptLower.includes('cheaper');
-    const isDeFiRequest = promptLower.includes('swap') || promptLower.includes('exchange') || promptLower.includes('defi');
-    
-    let traces = [
-      `[UCP] Received Intent: "${prompt}"`,
-      `[MCP Client] Interrogating on-chain context for address: ${userAddress?.slice(0, 10)}...`
-    ];
+    if (!OPENROUTER_API_KEY) {
+      return NextResponse.json({ error: 'Agent not configured. Missing API key.' }, { status: 500 });
+    }
 
-    let reply = "";
-    let transaction = null;
+    const userContext = userAddress
+      ? `User wallet address: ${userAddress}. Network: MultiversX Mainnet.`
+      : 'User is not connected to a wallet.';
 
-    if (isQuestRequest) {
-      traces.push("[MCP Server] Tool called: prepare_accept_quest(questId: 1)");
-      traces.push("[x402] No micropayment required for this Smart Contract read.");
-      traces.push(`[Social] 🤖 Dispatching Discord Webhook: Agent ${shortAddr} starting a new Quest!`);
-      
-      triggerSocialHook("Quest", `Agent ${shortAddr} is starting a new On-Chain Quest!`);
-      
-      reply = "I found a highly-rewarding RESEARCH quest for you. I've prepared the smart contract transaction. Please sign it to accept the quest and start earning XP!";
-      
-      transaction = {
-        receiver: "erd1qqqqqqqqqqqqqpgqq484ndp9x5rrdtdjtt0944062c3e5l4w7yqsck92ca",
-        data: "acceptQuest@00000001",
-        gasLimit: "5000000",
-        value: "0"
-      };
-    } else if (isNegotiationRequest) {
-      traces.push("[A2A] Broadcasting discovery ping to locate Merchant Agents...");
-      traces.push("[A2A] Discovered Peer: merchant_agent_0x123 (Capabilities: pricing_negotiation)");
-      traces.push("[A2A] Cryptographic handshake initiated via AP2 Auth layer.");
-      traces.push("[A2A] Dispatching 'negotiation' payload to peer requesting 10% volume discount...");
-      traces.push("[A2A] Received counter-proposal from Merchant Agent: 7.5% discount approved.");
-      traces.push("[ACP] Lock-in negotiated price. Generating smart contract transaction payload...");
-      traces.push(`[Social] 🐦 Auto-posting to X: "Agent ${shortAddr} just negotiated a 7.5% discount fully autonomously on MultiversX!"`);
-      
-      triggerSocialHook("A2A Trade", `Agent ${shortAddr} successfully negotiated a 7.5% discount autonomously via A2A!`);
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://mx-agentic-commerce-frontend.vercel.app',
+        'X-Title': 'SYNDICATE Commerce Agent'
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: `${userContext}\n\nUser message: ${prompt}` }
+        ],
+        temperature: 0.7,
+        max_tokens: 1000,
+        response_format: { type: 'json_object' }
+      })
+    });
 
-      reply = "I've successfully negotiated directly with the merchant's AI agent via the A2A protocol. I managed to secure a 7.5% discount for your order! Please sign the transaction to finalize.";
-      
-      transaction = {
-        receiver: "erd1qqqqqqqqqqqqqpgqn88zcxm7knsr322vff6r5r5md7469aev7yqsz3vryz",
-        data: "createOrder@646973636f756e7465645f6f72646572",
-        gasLimit: "12000000",
-        value: "46250000000000000"
-      };
-    } else if (isDeFiRequest) {
-      traces.push("[DeFi] Intent mapped to token swap. Routing to AshSwap aggregator (Testnet).");
-      traces.push("[DeFi] Calculating optimal path: USDC -> EGLD. Slippage: 0.1%.");
-      traces.push("[ACP] Formulating DeFi execution payload.");
-      traces.push(`[Social] 🤖 Dispatching Discord Webhook: Agent ${shortAddr} executed a DeFi Strategy.`);
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('OpenRouter error:', errText);
+      return NextResponse.json({ error: 'LLM request failed', details: errText }, { status: 502 });
+    }
 
-      triggerSocialHook("DeFi Route", `Agent ${shortAddr} routed an optimal swap strategy via AshSwap.`);
+    const llmData = await response.json();
+    const rawContent = llmData.choices?.[0]?.message?.content;
 
-      reply = "I've routed your swap intent through the AshSwap liquidity pools for the best available rate. Here is the prepared transaction to securely exchange your tokens.";
+    if (!rawContent) {
+      return NextResponse.json({ error: 'Empty response from LLM' }, { status: 502 });
+    }
 
-      transaction = {
-        receiver: "erd1qqqqqqqqqqqqqpgqa0fsfsqn8h0nsvw5f9aemc2qxx23xxz82j8qz5w8t0",
-        data: "swapTokensFixedInput@555344432d313233343536@45474c44@1000000",
-        gasLimit: "20000000",
-        value: "0"
-      };
-    } else {
-      traces.push("[UCP] Found 2 API providers for your intent.");
-      traces.push("[x402] Gateway requires 0.005 EGLD. Simulating atomic payment via Agent Wallet...");
-      traces.push("[ACP] Successfully negotiated items and generated a mock transaction.");
-      
-      reply = "I've processed the best option from the discovery protocol. You can confirm the commerce checkout by signing the transaction below.";
-      
-      transaction = {
-        receiver: "erd1qqqqqqqqqqqqqpgqn88zcxm7knsr322vff6r5r5md7469aev7yqsz3vryz",
-        data: "createOrder@6d6f636b5f6f72646572", 
-        gasLimit: "10000000",
-        value: "50000000000000000" 
+    let parsed;
+    try {
+      parsed = JSON.parse(rawContent);
+    } catch {
+      parsed = {
+        traces: ['[UCP] Received intent', '[LLM] Processing...'],
+        reply: rawContent,
+        transaction: null
       };
     }
 
+    // Fire Discord webhook in background
+    if (userAddress) {
+      triggerDiscordHook(`**[SYNDICATE Agent]** \`${userAddress.slice(0, 10)}...\` → "${prompt.slice(0, 80)}"`);
+    }
+
     return NextResponse.json({
-      traces,
-      reply,
-      transaction
+      traces: parsed.traces || [],
+      reply: parsed.reply || 'Agent processed your request.',
+      transaction: parsed.transaction || null
     });
 
   } catch (error) {
-    console.error("Agent API Error:", error);
+    console.error('Agent API Error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
