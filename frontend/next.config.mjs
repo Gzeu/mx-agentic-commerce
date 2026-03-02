@@ -6,6 +6,7 @@ const nextConfig = {
     typescript: {
         ignoreBuildErrors: true,
     },
+    transpilePackages: ['@multiversx/sdk-dapp'],
     webpack: (config, { isServer }) => {
         if (!isServer) {
             config.resolve.fallback = {
