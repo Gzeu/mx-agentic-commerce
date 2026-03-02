@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const MODEL = 'google/gemini-2.0-flash-001';
+const MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
 
 const SYSTEM_PROMPT = `You are SYNDICATE, an advanced AI Commerce Agent running on the MultiversX blockchain.
 You help users execute blockchain transactions, swap tokens, accept quests, negotiate deals, and interact with DeFi protocols.
