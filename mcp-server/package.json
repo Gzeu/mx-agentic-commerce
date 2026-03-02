@@ -1,7 +1,7 @@
 {
   "name": "@mx-agentic-commerce/mcp-server",
   "version": "1.0.0",
-  "description": "MCP Server for mx-agentic-commerce — on-chain state bridge",
+  "description": "MCP Server for mx-agentic-commerce - on-chain state bridge",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
@@ -11,8 +11,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "@multiversx/sdk-core": "^14.0.0",
-    "@multiversx/sdk-network-providers": "^3.0.0",
+    "@multiversx/sdk-core": "^15.3.0",
+    "@multiversx/sdk-network-providers": "^2.9.3",
     "zod": "^3.22.0"
   },
   "devDependencies": {
